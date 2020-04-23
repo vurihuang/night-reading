@@ -5,7 +5,7 @@
 - [Night Reading](#night-reading)
     - [Linux](#linux)
     - [MySQL](#mysql)
-    - [Transactions](#transactions)
+    - [Translations](#translations)
 
 <!-- /TOC -->
 
@@ -18,7 +18,7 @@
 - [Data Types](athena/mysql/data-types.md)
 - [Transaction ACID](athena/mysql/transaction-acid.md)
 
-## Transactions
+## Translations
 
 - [ECMAScript6 Features](athena/translations/ecmascript6-features.md)
 - [JavaScript Boost Skills in Few Minutes](athena/translations/javascript-boost-skills-in-few-mins.md)

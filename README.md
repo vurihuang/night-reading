@@ -16,6 +16,7 @@
 ## MySQL
 
 - [Data Types](athena/mysql/data-types.md)
+- [Transaction ACID](athena/mysql/transaction-acid.md)
 
 ## Transactions
 

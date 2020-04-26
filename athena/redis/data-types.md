@@ -8,13 +8,13 @@
         - [Strings](#strings)
             - [修改或查询key](#修改或查询key)
             - [设置key的过期时间](#设置key的过期时间)
-        - [List](#list)
+        - [Lists](#lists)
             - [固定长度的list](#固定长度的list)
             - [list的阻塞操作](#list的阻塞操作)
             - [key的原子创建和删除](#key的原子创建和删除)
+        - [Hashes](#hashes)
         - [Sets](#sets)
         - [Sorted Sets](#sorted-sets)
-        - [Hashes](#hashes)
         - [Bit arrays/Bitmaps](#bit-arraysbitmaps)
         - [HyperLogLogs](#hyperloglogs)
         - [Streams](#streams)
@@ -163,7 +163,7 @@ OK
 (integer) 1499
 ```
 
-### List
+### Lists
 
 `List`这个词的本意是一系列元素的集合，在编程语言中，有`Array`(数组)或者`Linked List`(链表)的形式。
 
@@ -265,14 +265,235 @@ list数据结构可以很轻松地作为一个队列，并引用于producer/cons
 可以总结如下三条规则：
 
 1. 当添加一个元素到key不存在的集合类型中，会先创建一个空的集合，再添加元素；
-2. 当从集合中删除元素，如果集合为空，key会自动被销毁。`Streams`类型是特殊例外。
+2. 当从集合中删除元素，如果集合为空，key会自动被销毁。`Streams`类型是特殊例外；
+3. 对一个空的list，无论是执行只读命令如`LLEN`(返回list的长度)，还是删除list的元素，总是返回相同的结果；
 
+例子1：
+
+```
+> del mylist
+(integer) 1
+> lpush mylist 1 2 3
+(integer) 13
+```
+
+如果key已存在值，是不允许被执行不正确的命令：
+
+```
+> set foo bar
+OK
+> lpush foo 1 2 3
+(error) WRONGTYPE Operation against a key holding the wrong kind of value
+> type foo
+string
+```
+
+例子2：
+
+```
+> lpush mylist 1 2 3
+(integer) 3
+> exists mylist
+(integer) 1
+> lpop mylist
+"3"
+> lpop mylist
+"2"
+> lpop mylist
+"1"
+> exists mylist
+(integer) 0
+```
+
+例子3：
+
+```
+> del mylist
+(integer) 0
+> llen mylist
+(integer) 0
+> lpop mylist
+(nil)
+```
+
+### Hashes
+
+Redis hashes类型就是一种键值对类型：
+
+```
+> hmset user:1000 username antirez birthyear 1977 verified 1
+OK
+> hget user:1000 username
+"antirez"
+> hget user:1000 birthyear
+"1977"
+> hgetall user:1000
+1) "username"
+2) "antirez"
+3) "birthyear"
+4) "1977"
+5) "verified"
+6) "1"
+```
+
+hashes类型并没有明确的字段数量限制，取决于足够的内存。
+
+`HMSET`设置多个键值对，`HGET`返回单个字段值，`HMGET`类似`HGET`返回键值对的数组。
+
+有些命令可以操作hashes的单个字段，如`HINCRBY`命令：
+
+```
+> hincrby user:1000 birthyear 10
+(integer) 1987
+> hincrby user:1000 birthyear 10
+(integer) 1997
+```
+
+操作hashes的命令有：
+
+- HDEL key field [field ...]: 删除一个或多个字段
+- HEXISTS key field: hash是否存在某个字段
+- HGET key field: 获取某个字段值
+- HGETALL key: 获取hash的所有字段及值
+- HINCRBY key field increment: 对hash的某个字段整型加操作
+- HINCRBYFLOAT key field incrment: 对hash的某个字段浮点加操作
+- HKEYS key: 获取hash的所有字段
+- HLEN key: 获取hash总的字段数量
+- HMGET key field [field ...]: 获取指定字段值
+- HMSET key field value [field value ...]: 对多个指定字段赋值
+- HSET key field value [field value ...]: 对多个指定字段赋值（HSET一开始仅支持对单个字段赋值，功能和HMSET完全相同，在Redis 4.0.0后，考虑废弃）
+- HSETNX key field value: 字段不存在才进行赋值
+- HSETLEN key field: 获取hash指定字段的字符串长度
+- HVALS key: 返回hash所有字段值
+- HSCAN key cursor [MATCH pattern] [Count count]: 迭代获取hash中的键值对
+
+```
+> hset letters a 1 b 2 c 3 d 4
+(integer) 4
+> hscan letters 0
+1) "0"
+2) 1) "a"
+   2) "1"
+   3) "b"
+   4) "2"
+   5) "c"
+   6) "3"
+   7) "d"
+   8) "4"
+```
+
+`HSCAN`命令同`SCAN`命令都是增量迭代元素集合，需要值得注意的地方：
+
+1. count默认值是10；
+2. 在不适用`MATCH`参数的情况下，在遍历`Sets`, `Hashes`, `Sorted Sets`或者key占用空间足够大使用`dicts`(哈希表)编码表示的时候，Redis会返回count或比count大的结果集；
+3. 在遍历只包含`Integer`值的`Set`（`intsets`)，或者空间占用小使用`ziplists`(压缩列表)编码的`Hashes`, `Sorted Sets`集合，会返回集合所有元素，忽略count参数值；
+
+```
+> config get 'hash-max-ziplist-*'
+1) "hash-max-ziplist-entries"
+2) "512"
+3) "hash-max-ziplist-value"
+4) "64"
+```
+
+根据Redis的默认配置：
+
+1. 当`Hashes`的键值对数量超过512时；
+2. 当`Hashes`存在属性值长度超过64时；
+
+上述两个条件，`Hashes`的编码方式都会从`ziplists`转为`dicts`。
 
 ### Sets
 
-### Sorted Sets
+`Sets`是一组无序元素集合。
 
-### Hashes
+```
+> sadd myset 1 2 3 b c a
+(integer) 3
+> smembers myset
+1) "b"
+2) "1"
+3) "2"
+4) "3"
+5) "a"
+6) "c"
+```
+
+检查`Sets`中是否存在某个元素：
+
+```
+> sismember myset 3
+(integer) 1
+> sismember myset 30
+(integer) 0
+```
+
+以文章的标签为例，如果我们要给一篇ID为1000的文章打上tag ID 1, 2, 5, 27：
+
+```
+> sadd news:1000:tags 1 2 5 27
+(integer) 4
+```
+
+当然也可以反向给tag打上所属的文章ID：
+
+```
+> sadd tag:1:news 1000
+(integer) 1
+> sadd tag:2:news 1000
+(integer) 1
+> sadd tag:5:news 1000
+(integer) 1
+> sadd tag:27:news 1000
+(integer) 1
+```
+
+获取文章的所有tag IDs：
+
+```
+> smembers news:1000:tags
+1. 5
+2. 1
+3. 27
+4. 2
+```
+
+获取所有tag交集的文章：
+
+```
+> sinter tag:1:news tag:2:news tag:5:news tag:27:news
+1) "1000"
+```
+
+文章ID1001和1000的并集，由于news:1001:tags是空集，所以结果集都是news:1000:tags：
+
+```
+> sunion news:1001:tags news:1000:tags
+1) "1"
+2) "2"
+3) "5"
+4) "27"
+```
+
+将文章ID1001和1000的并集，赋值给文章ID1002：
+
+```
+> sunionstore news:1002:tags news:1000:tags news:1001:tags
+(integer) 4
+> smembers news:1002:tags
+1) "1"
+2) "2"
+3) "5"
+4) "27"
+# 查看结果集长度
+> scard news:1002:tags
+(integer) 4
+# 随机移除一个元素
+> spop news:1002:tags
+"2"
+```
+
+### Sorted Sets
 
 ### Bit arrays/Bitmaps
 
@@ -285,3 +506,4 @@ list数据结构可以很轻松地作为一个队列，并引用于producer/cons
 References:
 
 - [data-types-intro](https://redis.io/topics/data-types-intro)
+- [redis-command-scan](https://redis.io/commands/scan)
